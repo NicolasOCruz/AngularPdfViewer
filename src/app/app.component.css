@@ -13,12 +13,16 @@
   .pdf-scroll-container {
     height: 85vh;
     overflow-y: scroll;
-    border: 1px solid #ccc;
+  }
+
+  .pdf-stack {
+    background-color: #f2f2f2;
   }
   
   .pdf-stack > div {
     display: flex;
     justify-content: center;
     align-items: center;
+    background-color: #f2f2f2;
   }
   

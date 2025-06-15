@@ -51,7 +51,7 @@ export class AppComponent implements OnInit {
       const wrapper = document.createElement("div");
       wrapper.dataset['page'] = i.toString();
       wrapper.style.minHeight = "900px";
-      wrapper.style.marginBottom = "20px";
+      wrapper.style.marginBottom = i == this.totalPages ? "0px": "20px";
 
       container.appendChild(wrapper);
       this.pageElements.set(i, wrapper);
