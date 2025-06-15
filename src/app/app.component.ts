@@ -34,7 +34,7 @@ export class AppComponent implements OnInit {
     const pdfjs = pdfjsLib as any;
     pdfjs.GlobalWorkerOptions.workerSrc = "/assets/pdf.worker.min.mjs";
 
-    const binary = atob(FILE_BASE_64);
+    const binary = this.base64ToUint8Array(FILE_BASE_64);
     const loadingTask = pdfjs.getDocument({ data: binary });
 
     this.pdfDocument = await loadingTask.promise;
@@ -100,29 +100,46 @@ export class AppComponent implements OnInit {
     });
   }
 
+  base64ToUint8Array(base64: string): Uint8Array {
+    const binaryString = atob(base64);
+    const len = binaryString.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    return bytes;
+  }
+
   async renderPage(pageNumber: number, container: HTMLDivElement) {
     try {
       const page = await this.pdfDocument.getPage(pageNumber);
-      const viewport = page.getViewport({ scale: this.scale });
+      const outputScale = window.devicePixelRatio || 1;
+
+      const viewport = page.getViewport({ scale: this.scale * outputScale });
 
       const canvas = document.createElement("canvas");
       const context = canvas.getContext("2d")!;
       canvas.width = viewport.width;
       canvas.height = viewport.height;
 
+      canvas.style.width = `${viewport.width / outputScale}px`;
+      canvas.style.height = `${viewport.height / outputScale}px`;
+
+      context.setTransform(outputScale, 0, 0, outputScale, 0, 0);
+
       container.innerHTML = "";
       container.appendChild(canvas);
 
       const renderContext = {
         canvasContext: context,
-        viewport: viewport,
+        viewport: page.getViewport({ scale: this.scale }),
       };
 
       await page.render(renderContext).promise;
       this.renderedPages.add(pageNumber);
       this.renderHistory.push(pageNumber);
 
-      // 🧹 Mantém no máximo 6 páginas renderizadas
+      // Limita a 6 páginas na memória
       if (this.renderHistory.length > 6) {
         const oldest = this.renderHistory.shift();
         if (oldest !== undefined && this.renderedPages.has(oldest)) {
