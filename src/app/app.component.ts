@@ -1,106 +1,135 @@
 import {
   Component,
-  OnInit,
-  OnDestroy,
   ElementRef,
   ViewChild,
+  OnInit,
+  NgZone,
 } from "@angular/core";
-import { RouterOutlet } from "@angular/router";
 import * as pdfjsLib from "pdfjs-dist";
 
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [RouterOutlet],
   templateUrl: './app.component.html',
   styleUrl: './app.component.css'
 })
-export class AppComponent implements OnInit, OnDestroy {
+export class AppComponent implements OnInit {
   @ViewChild("pdfContainer", { static: true })
   pdfContainer!: ElementRef<HTMLDivElement>;
-  private pdfDocument: any;
-  private currentPageNumber = 1;
-  private scale = 1.5;
+
+  pdfDocument: any;
   totalPages = 0;
   currentPage = 1;
+  scale = 1.5;
 
-  constructor() {}
+  observer!: IntersectionObserver;
+  renderedPages: Set<number> = new Set();
+  renderHistory: number[] = [];
+  pageElements: Map<number, HTMLDivElement> = new Map();
 
-  ngOnInit(): void {
-    this.loadPdf();
+  constructor(private ngZone: NgZone) {}
+
+  async ngOnInit(): Promise<void> {
+    const pdfjs = pdfjsLib as any;
+    pdfjs.GlobalWorkerOptions.workerSrc = "/assets/pdf.worker.min.mjs";
+
+    const loadingTask = pdfjs.getDocument("/assets/Spring_AI.pdf");
+    this.pdfDocument = await loadingTask.promise;
+    this.totalPages = this.pdfDocument.numPages;
+
+    this.setupScrollTracking();
+    this.createPlaceholdersAndObserve();
   }
 
-  ngOnDestroy(): void {
-    // Clean up resources when the component is destroyed.
-  }
-
-  // Load the PDF file.
-  async loadPdf() {
-    try {
-      const pdfjs = pdfjsLib as any;
-      pdfjs.GlobalWorkerOptions.workerSrc = "/assets/pdf.worker.min.mjs";
-
-      const loadingTask = pdfjs.getDocument("/assets/Spring_AI.pdf"); // Path to your PDF file.
-      this.pdfDocument = await loadingTask.promise;
-      this.totalPages = this.pdfDocument.numPages;
-      this.renderPage(this.currentPageNumber);
-    } catch (error) {
-      console.error("Error loading PDF:", error);
-    }
-  }
-
-  // Render a specific page of the PDF.
-  async renderPage(pageNumber: number) {
-    const page = await this.pdfDocument.getPage(pageNumber);
-    const viewport = page.getViewport({ scale: this.scale });
-
+  createPlaceholdersAndObserve() {
     const container = this.pdfContainer.nativeElement;
-    container.innerHTML = ""; // Clear previous content
 
-    const canvas = document.createElement("canvas");
-    container.appendChild(canvas);
+    for (let i = 1; i <= this.totalPages; i++) {
+      const wrapper = document.createElement("div");
+      wrapper.dataset['page'] = i.toString();
+      wrapper.style.minHeight = "900px";
+      wrapper.style.marginBottom = "20px";
 
-    const context = canvas.getContext("2d")!;
-    canvas.height = viewport.height;
-    canvas.width = viewport.width;
-
-    const renderContext = {
-      canvasContext: context,
-      viewport: viewport,
-    };
-
-    await page.render(renderContext).promise;
-  }
-
-  // Navigate to the previous page.
-  goToPrevPage() {
-    if (this.currentPageNumber > 1) {
-      this.currentPageNumber--;
-      this.currentPage = this.currentPageNumber;
-      this.renderPage(this.currentPageNumber);
+      container.appendChild(wrapper);
+      this.pageElements.set(i, wrapper);
+      this.observer.observe(wrapper);
     }
   }
 
-  // Navigate to the next page.
-  goToNextPage() {
-    if (this.currentPageNumber < this.totalPages) {
-      this.currentPageNumber++;
-      this.currentPage = this.currentPageNumber;
-      this.renderPage(this.currentPageNumber);
-    }
+  setupScrollTracking() {
+    this.ngZone.runOutsideAngular(() => {
+      this.observer = new IntersectionObserver(
+        (entries) => {
+          const visiblePages = new Set<number>();
+
+          entries.forEach((entry) => {
+            const page = parseInt(entry.target.getAttribute("data-page")!, 10);
+
+            if (entry.isIntersecting) {
+              visiblePages.add(page);
+
+              this.ngZone.run(() => {
+                this.currentPage = page;
+              });
+
+              if (!this.renderedPages.has(page)) {
+                this.renderPage(page, entry.target as HTMLDivElement);
+              }
+            }
+          });
+
+          // Pré-renderiza anterior e próxima
+          visiblePages.forEach((page) => {
+            [page - 1, page + 1].forEach((p) => {
+              if (p >= 1 && p <= this.totalPages && !this.renderedPages.has(p)) {
+                const el = this.pageElements.get(p);
+                if (el) this.renderPage(p, el);
+              }
+            });
+          });
+        },
+        {
+          root: null,
+          rootMargin: "400px 0px",
+          threshold: 0.1,
+        }
+      );
+    });
   }
 
-  // Zoom in to the PDF.
-  zoomIn() {
-    this.scale += 0.25;
-    this.renderPage(this.currentPageNumber);
-  }
+  async renderPage(pageNumber: number, container: HTMLDivElement) {
+    try {
+      const page = await this.pdfDocument.getPage(pageNumber);
+      const viewport = page.getViewport({ scale: this.scale });
 
-  // Zoom out of the PDF.
-  zoomOut() {
-    if (this.scale > 0.5) {
-      this.scale -= 0.25;
-      this.renderPage(this.currentPageNumber);
+      const canvas = document.createElement("canvas");
+      const context = canvas.getContext("2d")!;
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+
+      container.innerHTML = "";
+      container.appendChild(canvas);
+
+      const renderContext = {
+        canvasContext: context,
+        viewport: viewport,
+      };
+
+      await page.render(renderContext).promise;
+      this.renderedPages.add(pageNumber);
+      this.renderHistory.push(pageNumber);
+
+      // 🧹 Mantém no máximo 6 páginas renderizadas
+      if (this.renderHistory.length > 6) {
+        const oldest = this.renderHistory.shift();
+        if (oldest !== undefined && this.renderedPages.has(oldest)) {
+          const el = this.pageElements.get(oldest);
+          if (el) el.innerHTML = "";
+          this.renderedPages.delete(oldest);
+        }
+      }
+    } catch (error) {
+      console.error(`Erro ao renderizar página ${pageNumber}:`, error);
     }
   }
 }
