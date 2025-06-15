@@ -6,6 +6,7 @@ import {
   NgZone,
 } from "@angular/core";
 import * as pdfjsLib from "pdfjs-dist";
+import { FILE_BASE_64 } from "../shared/model/file.interface";
 
 @Component({
   selector: 'app-root',
@@ -33,7 +34,9 @@ export class AppComponent implements OnInit {
     const pdfjs = pdfjsLib as any;
     pdfjs.GlobalWorkerOptions.workerSrc = "/assets/pdf.worker.min.mjs";
 
-    const loadingTask = pdfjs.getDocument("/assets/Spring_AI.pdf");
+    const binary = atob(FILE_BASE_64);
+    const loadingTask = pdfjs.getDocument({ data: binary });
+
     this.pdfDocument = await loadingTask.promise;
     this.totalPages = this.pdfDocument.numPages;
 
