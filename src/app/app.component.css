@@ -1,0 +1,16 @@
+.pdf-viewer-controls {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 10px;
+  }
+  
+  button {
+    margin: 0 5px;
+    padding: 5px 10px;
+  }
+  
+  .pdf-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }

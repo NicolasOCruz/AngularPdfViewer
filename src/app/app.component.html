@@ -1,0 +1,15 @@
+<div class="pdf-viewer-controls">
+  <button (click)="goToPrevPage()" [disabled]="currentPage <= 1">
+    Previous
+  </button>
+  <span>Page {{ currentPage }} of {{ totalPages }}</span>
+  <button (click)="goToNextPage()" [disabled]="currentPage >= totalPages">
+    Next
+  </button>
+  <button (click)="zoomIn()">Zoom In</button>
+  <button (click)="zoomOut()">Zoom Out</button>
+</div>
+
+<div class="pdf-container">
+  <div #pdfContainer></div>
+</div>
