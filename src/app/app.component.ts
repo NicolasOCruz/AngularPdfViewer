@@ -31,6 +31,12 @@ export class AppComponent implements OnInit {
   constructor(private ngZone: NgZone) {}
 
   async ngOnInit(): Promise<void> {
+    window.addEventListener("resize", () => {
+      location.reload();
+    });
+
+    //this.scale = this.getResponsiveScale();
+
     const pdfjs = pdfjsLib as any;
     pdfjs.GlobalWorkerOptions.workerSrc = "/assets/pdf.worker.min.mjs";
 
@@ -44,14 +50,25 @@ export class AppComponent implements OnInit {
     this.createPlaceholdersAndObserve();
   }
 
+  getResponsiveScale(): number {
+    const width = window.innerWidth;
+  
+    if (width >= 1200) return 1.5;   // tablets grandes ou modo desktop
+    if (width >= 768) return 1.2;    // tablets pequenos
+    return 0.9;                      // celulares
+  }
+
+
   createPlaceholdersAndObserve() {
     const container = this.pdfContainer.nativeElement;
 
     for (let i = 1; i <= this.totalPages; i++) {
       const wrapper = document.createElement("div");
       wrapper.dataset['page'] = i.toString();
-      wrapper.style.minHeight = "900px";
-      wrapper.style.marginBottom = i == this.totalPages ? "0px": "20px";
+      wrapper.style.minHeight = "calc(100vw * 1.3)"; // proporcional à largura da tela
+      wrapper.style.marginBottom = i == this.totalPages ? "0px": "0,1vh";
+      wrapper.style.display = "flex";
+      wrapper.style.justifyContent = "center";
 
       container.appendChild(wrapper);
       this.pageElements.set(i, wrapper);
@@ -122,8 +139,10 @@ export class AppComponent implements OnInit {
       canvas.width = viewport.width;
       canvas.height = viewport.height;
 
-      canvas.style.width = `${viewport.width / outputScale}px`;
-      canvas.style.height = `${viewport.height / outputScale}px`;
+      canvas.style.maxWidth = "95%";
+      canvas.style.height = "auto";
+      canvas.style.marginBottom = "1vh";
+      canvas.style.marginTop = "1vh";
 
       context.setTransform(outputScale, 0, 0, outputScale, 0, 0);
 
